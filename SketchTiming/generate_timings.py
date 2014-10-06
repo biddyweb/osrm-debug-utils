@@ -2,13 +2,45 @@
 
 import pickle
 import numpy as np
+import polyline
+from intersection import num_self_intersections
 
 f = open("requests.pickle", "rb")
-data = pickle.load(f)
+data = [r for r in pickle.load(f) if r["statistics_data"]["input_length"] > 0]
 
 TIME_UNIT = "usec"
+SHUFFLE_CONSTANT = 0.000001
 
-statistics_data = [r["statistics_data"] for r in data if r["statistics_data"]["input_length"] > 0]
+statistics_data = [r["statistics_data"] for r in data]
+
+print("Decoding...")
+routes = [polyline.decode(r["route_geometry"]) for r in data]
+sketches = [polyline.decode(r["schematized_geometry"]) for r in data]
+
+more_intersections = 0
+less_intersections = 0
+same_intersections = 0
+
+less_diffs = []
+more_diffs = []
+
+print("Testing intersection..")
+for r, s in zip(routes, sketches):
+    num_r = num_self_intersections(r)
+    num_s = num_self_intersections(s)
+    if num_r == num_s:
+        same_intersections += 1
+    if num_r > num_s:
+        less_intersections += 1
+        less_diffs.append(num_r - num_s)
+    if num_r < num_s:
+        more_intersections += 1
+        more_diffs.append(num_s - num_r)
+
+print("Self-Intersections")
+print("less: #%i -%.02f" % (less_intersections, len(less_diffs) and np.average(less_diffs)))
+print("same: #%i" % same_intersections)
+print("more: #%i +%.02f" % (more_intersections, len(more_diffs) and np.median(more_diffs) or 0))
 
 series = {}
 for i, d in enumerate(statistics_data):
